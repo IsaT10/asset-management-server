@@ -33,6 +33,15 @@ const requestCollection = client
 
 async function run() {
   try {
+    app.get('/users', async (req, res) => {
+      try {
+        const result = await usersCollection.find().toArray();
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+      }
+    });
+
     app.post('/users', async (req, res) => {
       try {
         const data = req.body;
@@ -48,6 +57,33 @@ async function run() {
         const { email } = req.params;
         const query = { email };
         const result = await usersCollection.findOne(query);
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+      }
+    });
+
+    app.patch('/users/:id', async (req, res) => {
+      try {
+        const { companyName, name, dateOfBirth } = req.body;
+        const { id } = req.params;
+        const updateField = {};
+
+        const query = { _id: new ObjectId(id) };
+
+        if (companyName !== undefined) {
+          updateField.companyName = companyName;
+        }
+        if (name !== undefined) {
+          updateField.name = name;
+        }
+        if (dateOfBirth !== undefined) {
+          updateField.dateOfBirth = dateOfBirth;
+        }
+        const updateDoc = {
+          $set: updateField,
+        };
+        const result = await usersCollection.updateOne(query, updateDoc);
         res.send(result);
       } catch (error) {
         console.log(error);
@@ -188,10 +224,14 @@ async function run() {
     //all assets
     app.get('/allAssets', async (req, res) => {
       try {
-        const { sort, assetType, stockStatus, search } = req.query;
+        const { sort, assetType, stockStatus, search, email } = req.query;
         const options = { sort: { quantity: sort === 'asc' ? 1 : -1 } };
 
         const query = {};
+
+        if (email) {
+          query.hrEmail = email;
+        }
 
         if (stockStatus === 'Available') {
           query.quantity = { $gt: 1 };
@@ -237,5 +277,5 @@ app.get('/', (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`asset management server is running :${port}`);
+  console.log(`assets management server is running :${port}`);
 });
