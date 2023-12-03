@@ -3,6 +3,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const cors = require('cors');
 const app = express();
 require('dotenv').config();
+const jwt = require('jsonwebtoken');
 const stripe = require('stripe')(process.env.STRIPE_KEY);
 
 const port = process.env.PORT || 5000;
@@ -10,7 +11,7 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-//assetsManagement QRMqknmKLzBH85kG
+//middlewares
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.kfd97zi.mongodb.net/?retryWrites=true&w=majority`;
 
@@ -36,6 +37,39 @@ const paymentCollection = client.db('assetsManagement').collection('payments');
 
 async function run() {
   try {
+    const verifyToken = (req, res, next) => {
+      console.log(req?.headers?.authorization);
+      if (!req?.headers?.authorization) {
+        return res.status(401).send({ message: 'Unauthorized user' });
+      }
+      const token = req.headers.authorization.split(' ')[1];
+
+      jwt.verify(token, process.env.SECRET_TOKEN, (err, decoded) => {
+        if (err) res.status(401).send({ message: 'Unauthorized user' });
+
+        req.decoded = decoded;
+        next();
+      });
+    };
+
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email };
+
+      const user = await usersCollection.findOne(query);
+
+      const isHR = user?.role === 'HR';
+
+      if (!isHR) {
+        return res.status(403).send({ message: 'Forbidden user' });
+      }
+      next();
+    };
+
+    //jwt
+
+    // users
+
     app.get('/users', async (req, res) => {
       try {
         const result = await usersCollection.find().toArray();
@@ -64,7 +98,7 @@ async function run() {
       }
     });
 
-    app.get('/users/HR/:email', async (req, res) => {
+    app.get('/users/HR/:email', verifyToken, async (req, res) => {
       try {
         const { email } = req.params;
         const query = { email };
@@ -82,7 +116,14 @@ async function run() {
         const updateField = {};
         const query = { _id: new ObjectId(id) };
 
-        const fieldToCheck = ['companyName', 'name', 'dateOfBirth', 'package'];
+        const fieldToCheck = [
+          'companyName',
+          'companyLogo',
+          'name',
+          'dateOfBirth',
+          'package',
+          'image',
+        ];
 
         fieldToCheck.forEach((field) => {
           if (req.body[field] !== undefined) {
@@ -120,10 +161,11 @@ async function run() {
       }
     });
 
-    //request for an assets
+    //request for an assets///////////////////////////////////////////
 
-    app.get('/requestForAsset', async (req, res) => {
+    app.get('/requestForAsset', verifyToken, async (req, res) => {
       try {
+        console.log('email', req?.decoded?.email);
         const {
           email,
           companyName,
@@ -131,10 +173,12 @@ async function run() {
           assetType,
           search,
           searchUser,
+          // page,
+          // size,
         } = req.query;
         const query = {};
 
-        // console.log(searchUser);
+        console.log(searchUser);
 
         if (email) {
           query.email = email;
@@ -156,7 +200,7 @@ async function run() {
           query.status = requestStatus;
         }
 
-        if (search.length) {
+        if (search?.length) {
           query.assetName = { $regex: search, $options: 'i' };
         }
 
@@ -164,11 +208,24 @@ async function run() {
           query.type = assetType;
         }
 
+        // const page = parseInt(req.query.page) || 0;
+        // const size = parseInt(req.query.size) || 10;
+        // console.log(parseInt(page), size, 'fdf');
+
         const result = await requestCollection.find(query).toArray();
         res.send(result);
+      } catch (error) {
+        console.log(error);
+      }
+    });
 
-        // const result = await requestCollection.find().toArray();
-        // res.send(result);
+    app.get('/requestForAsset/count', async (req, res) => {
+      try {
+        const { companyName } = req.query;
+        console.log(companyName, 'sdfds');
+        const query = { companyName };
+        const count = await requestCollection.countDocuments(query);
+        res.send({ count });
       } catch (error) {
         console.log(error);
       }
@@ -341,7 +398,7 @@ async function run() {
     });
 
     //all assets
-    app.get('/allAssets', async (req, res) => {
+    app.get('/allAssets', verifyToken, async (req, res) => {
       try {
         const { sort, assetType, stockStatus, search, email, limitedItem } =
           req.query;
@@ -450,6 +507,20 @@ async function run() {
         });
 
         res.send({ result, updateHR });
+      } catch (error) {
+        console.log(error);
+      }
+    });
+
+    app.post('/jwt', async (req, res) => {
+      try {
+        console.log();
+        const data = req.body;
+        const token = jwt.sign(data, process.env.SECRET_TOKEN, {
+          expiresIn: '1h',
+        });
+
+        res.send({ token });
       } catch (error) {
         console.log(error);
       }
