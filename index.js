@@ -38,7 +38,7 @@ const paymentCollection = client.db('assetsManagement').collection('payments');
 async function run() {
   try {
     const verifyToken = (req, res, next) => {
-      console.log(req?.headers?.authorization, 'token');
+      // console.log(req?.headers?.authorization, 'token');
       if (!req?.headers?.authorization) {
         return res.status(401).send({ message: 'Unauthorized user' });
       }
@@ -104,6 +104,45 @@ async function run() {
         const query = { email };
         const result = await usersCollection.findOne(query);
         res.send(result);
+      } catch (error) {
+        console.log(error);
+      }
+    });
+
+    app.patch('/users/ids', async (req, res) => {
+      try {
+        const { selectedUsers, companyName, companyLogo, members, HR_id } =
+          req.body;
+        // console.log(ids);
+        console.log(selectedUsers, companyName, companyLogo, HR_id);
+
+        const query = {
+          _id: { $in: selectedUsers.map((id) => new ObjectId(id)) },
+        };
+
+        const updatedField = {};
+
+        const fieldToUpdate = ['companyName', 'companyLogo'];
+
+        fieldToUpdate.forEach((field) => {
+          if (req.body[field] !== undefined) {
+            updatedField[field] = req.body[field];
+          }
+        });
+        const updateDoc = {
+          $set: updatedField,
+        };
+
+        const memberCount = await usersCollection.updateOne(
+          { _id: new ObjectId(HR_id) },
+          {
+            $set: { members },
+          }
+        );
+
+        const result = await usersCollection.updateMany(query, updateDoc);
+
+        res.send({ result, memberCount });
       } catch (error) {
         console.log(error);
       }
@@ -483,7 +522,7 @@ async function run() {
     app.post('/create-payment-intent', async (req, res) => {
       try {
         const { price } = req.body;
-        const amount = parseInt(price * 100);
+        const amount = parseInt(price || 1 * 100);
         // console.log(amount);
 
         const paymentIntent = await stripe.paymentIntents.create({
