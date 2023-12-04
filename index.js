@@ -38,7 +38,7 @@ const paymentCollection = client.db('assetsManagement').collection('payments');
 async function run() {
   try {
     const verifyToken = (req, res, next) => {
-      console.log(req?.headers?.authorization);
+      console.log(req?.headers?.authorization, 'token');
       if (!req?.headers?.authorization) {
         return res.status(401).send({ message: 'Unauthorized user' });
       }
@@ -111,7 +111,7 @@ async function run() {
 
     app.patch('/users/:id', async (req, res) => {
       try {
-        const { HR_id, members } = req.body;
+        const { HR_id, members, email, name } = req.body;
         const { id } = req.params;
         const updateField = {};
         const query = { _id: new ObjectId(id) };
@@ -150,12 +150,16 @@ async function run() {
             $set: { members },
           }
         );
+        const nameChange = await requestCollection.updateMany(
+          { email },
+          { $set: { name } }
+        );
 
         const updateDoc = {
           $set: updateField,
         };
         const result = await usersCollection.updateOne(query, updateDoc);
-        res.send({ result, memberCount });
+        res.send({ result, memberCount, nameChange });
       } catch (error) {
         console.log(error);
       }
@@ -326,7 +330,7 @@ async function run() {
       }
     });
 
-    app.get('/custom-request', async (req, res) => {
+    app.get('/custom-request', verifyToken, async (req, res) => {
       try {
         const { email, companyName } = req.query;
         const query = {};
@@ -526,9 +530,9 @@ async function run() {
       }
     });
 
-    console.log(
-      'Pinged your deployment. You successfully connected to MongoDB!'
-    );
+    // console.log(
+    //   'Pinged your deployment. You successfully connected to MongoDB!'
+    // );
   } finally {
   }
 }
